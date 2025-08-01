@@ -71,12 +71,28 @@ addEventHandler('vaccine:showShop', root, function()
     addEventHandler('onClientKey', root, keyPanel)
 end)
 
+local effectTimer
+
 addEvent('vaccine:effects', true)
 addEventHandler('vaccine:effects', root, function(state)
     if state then
-        setGameSpeed(config.disease.slowdown)
-        setCameraShakeLevel(config.disease.cameraShake)
+        if isTimer(effectTimer) then killTimer(effectTimer) end
+        effectTimer = setTimer(function()
+            if not isElement(localPlayer) then return end
+            local hp = getElementHealth(localPlayer)
+            if hp < 40 then
+                setGameSpeed(config.disease.slowdown)
+                setCameraShakeLevel(config.disease.cameraShake)
+            else
+                setGameSpeed(1)
+                setCameraShakeLevel(0)
+            end
+        end, 500, 0)
     else
+        if isTimer(effectTimer) then
+            killTimer(effectTimer)
+            effectTimer = nil
+        end
         setGameSpeed(1)
         setCameraShakeLevel(0)
     end

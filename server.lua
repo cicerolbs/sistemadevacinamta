@@ -4,6 +4,9 @@ local diseaseStartTimers = {}
 local protectionTimers = {}
 local pendingOffers = {}
 
+-- Garantir que o evento clientside esteja registrado para evitar erros
+addEvent('vaccine:effects', true)
+
 local db = dbConnect('sqlite', 'vaccines.db')
 if db then
     dbExec(db, 'CREATE TABLE IF NOT EXISTS vaccines (serial TEXT PRIMARY KEY, vaccine_expires INTEGER, sick INTEGER, disease_time INTEGER)')
@@ -60,6 +63,8 @@ local function startDisease(player)
         if isElement(player) and getElementData(player, 'vaccine.sick') then
             local health = getElementHealth(player)
             setElementHealth(player, math.max(health - config.disease.healthAmount, 0))
+            -- lembrar o jogador de procurar a vacina
+            exports['[HS]Notify_System']:notify(player, 'Você está doente! Procure um SAMU ou vá ao hospital para vacinar-se.', 'warning')
         end
     end, interval, 0)
 end
