@@ -1,6 +1,11 @@
 local config = CONFIG
-local diseaseTimers = {}
+local diseaseDamageTimers = {}
+local diseaseStartTimers = {}
+local protectionTimers = {}
 local pendingOffers = {}
+
+local db = dbConnect('sqlite', 'vaccines.db')
+dbExec(db, 'CREATE TABLE IF NOT EXISTS vaccines (serial TEXT PRIMARY KEY, vaccine_expires INTEGER, sick INTEGER, disease_time INTEGER)')
 
 local function isSAMU(player)
     local account = getPlayerAccount(player)
@@ -19,14 +24,28 @@ local function getPlayerByID(id)
     return nil
 end
 
+local function savePlayerData(player, protectedUntil, sick, diseaseTime)
+    local serial = getPlayerSerial(player)
+    if not serial then return end
+    local prot = protectedUntil or (getElementData(player, 'vaccine.protectedUntil') or 0)
+    local sickVal = sick ~= nil and (sick and 1 or 0) or (getElementData(player, 'vaccine.sick') and 1 or 0)
+    local diseaseVal = diseaseTime or (getElementData(player, 'vaccine.nextDisease') or 0)
+    dbExec(db, 'INSERT OR REPLACE INTO vaccines (serial, vaccine_expires, sick, disease_time) VALUES (?,?,?,?)', serial, prot, sickVal, diseaseVal)
+end
+
 local function startDisease(player)
     if not isElement(player) then return end
     if getElementData(player, 'vaccine.protected') then return end
+    if diseaseStartTimers[player] and isTimer(diseaseStartTimers[player]) then
+        killTimer(diseaseStartTimers[player])
+        diseaseStartTimers[player] = nil
+    end
     setElementData(player, 'vaccine.sick', true)
+    savePlayerData(player, 0, true, 0)
     exports['[HS]Notify_System']:notify(player, 'Você está doente! Procure um SAMU ou vá ao hospital para vacinar-se.', 'warning')
     triggerClientEvent(player, 'vaccine:effects', resourceRoot, true)
     local interval = config.disease.healthInterval * 60000
-    diseaseTimers[player] = setTimer(function()
+    diseaseDamageTimers[player] = setTimer(function()
         if isElement(player) and getElementData(player, 'vaccine.sick') then
             local health = getElementHealth(player)
             setElementHealth(player, math.max(health - config.disease.healthAmount, 0))
@@ -34,39 +53,87 @@ local function startDisease(player)
     end, interval, 0)
 end
 
-local function scheduleDisease(player)
+local function scheduleDisease(player, delay)
     if not isElement(player) then return end
-    local delay = config.disease.startMinutes * 60000
-    setTimer(startDisease, delay, 1, player)
+    if diseaseStartTimers[player] and isTimer(diseaseStartTimers[player]) then
+        killTimer(diseaseStartTimers[player])
+    end
+    local d = delay or config.disease.startMinutes
+    local delayMs = d * 60000
+    diseaseStartTimers[player] = setTimer(startDisease, delayMs, 1, player)
+    local nextTime = getRealTime().timestamp + d * 60
+    setElementData(player, 'vaccine.sick', false)
+    setElementData(player, 'vaccine.nextDisease', nextTime)
+    savePlayerData(player, nil, false, nextTime)
 end
 
 local function giveProtection(player, minutes)
-    if diseaseTimers[player] and isTimer(diseaseTimers[player]) then
-        killTimer(diseaseTimers[player])
-        diseaseTimers[player] = nil
+    if diseaseDamageTimers[player] and isTimer(diseaseDamageTimers[player]) then
+        killTimer(diseaseDamageTimers[player])
+        diseaseDamageTimers[player] = nil
+    end
+    if diseaseStartTimers[player] and isTimer(diseaseStartTimers[player]) then
+        killTimer(diseaseStartTimers[player])
+        diseaseStartTimers[player] = nil
+    end
+    if protectionTimers[player] and isTimer(protectionTimers[player]) then
+        killTimer(protectionTimers[player])
     end
     setElementData(player, 'vaccine.sick', false)
     triggerClientEvent(player, 'vaccine:effects', resourceRoot, false)
+    local expires = getRealTime().timestamp + minutes * 60
     setElementData(player, 'vaccine.protected', true)
-    setTimer(function()
+    setElementData(player, 'vaccine.protectedUntil', expires)
+    savePlayerData(player, expires, false, 0)
+    protectionTimers[player] = setTimer(function()
         if isElement(player) then
             setElementData(player, 'vaccine.protected', false)
+            setElementData(player, 'vaccine.protectedUntil', 0)
+            savePlayerData(player, 0, false, 0)
             scheduleDisease(player)
         end
     end, minutes * 60000, 1)
 end
 
+local function loadPlayerData(player)
+    local serial = getPlayerSerial(player)
+    dbQuery(function(qh)
+        local result = dbPoll(qh, 0)
+        local now = getRealTime().timestamp
+        if result and result[1] then
+            local data = result[1]
+            if data.vaccine_expires and data.vaccine_expires > now then
+                local remaining = (data.vaccine_expires - now) / 60
+                giveProtection(player, remaining)
+            elseif data.sick == 1 then
+                startDisease(player)
+            elseif data.disease_time and data.disease_time > now then
+                local delay = (data.disease_time - now) / 60
+                scheduleDisease(player, delay)
+            else
+                scheduleDisease(player)
+            end
+        else
+            scheduleDisease(player)
+        end
+    end, db, 'SELECT vaccine_expires, sick, disease_time FROM vaccines WHERE serial=?', serial)
+end
+
 addEventHandler('onResourceStart', resourceRoot, function()
     for _,p in ipairs(getElementsByType('player')) do
-        scheduleDisease(p)
+        loadPlayerData(p)
     end
 end)
 
 addEventHandler('onPlayerJoin', root, function()
-    scheduleDisease(source)
+    loadPlayerData(source)
 end)
 
-addCommandHandler('vacina', function(player, cmd, id)
+addEventHandler('onPlayerQuit', root, function()
+    savePlayerData(source)
+end)
+
+addCommandHandler(config.vaccination.command, function(player, cmd, id)
     if not isSAMU(player) then
         exports['[HS]Notify_System']:notify(player, 'Você não tem permissão.', 'error')
         return
@@ -134,8 +201,11 @@ end)
 -- Console commands
 addCommandHandler(config.commands.reset, function(player, cmd, id)
     if player and getElementType(player) == 'player' then
-        exports['[HS]Notify_System']:notify(player, 'Comando disponível apenas no console.', 'error')
-        return
+        local account = getPlayerAccount(player)
+        if not account or isGuestAccount(account) or not isObjectInACLGroup('user.'..getAccountName(account), aclGetGroup(config.commands.acl)) then
+            exports['[HS]Notify_System']:notify(player, 'Você não tem permissão.', 'error')
+            return
+        end
     end
     local target = getPlayerByID(id)
     if not target then
@@ -143,6 +213,8 @@ addCommandHandler(config.commands.reset, function(player, cmd, id)
         return
     end
     setElementData(target, 'vaccine.protected', false)
+    setElementData(target, 'vaccine.protectedUntil', 0)
+    savePlayerData(target, 0, false, 0)
     exports['[HS]Notify_System']:notify(target, 'Sua proteção contra doenças foi removida.', 'error')
     scheduleDisease(target)
     outputConsole('Vacina de '..getPlayerName(target)..' resetada.')
@@ -150,8 +222,11 @@ end)
 
 addCommandHandler(config.commands.set, function(player, cmd, id, hours)
     if player and getElementType(player) == 'player' then
-        exports['[HS]Notify_System']:notify(player, 'Comando disponível apenas no console.', 'error')
-        return
+        local account = getPlayerAccount(player)
+        if not account or isGuestAccount(account) or not isObjectInACLGroup('user.'..getAccountName(account), aclGetGroup(config.commands.acl)) then
+            exports['[HS]Notify_System']:notify(player, 'Você não tem permissão.', 'error')
+            return
+        end
     end
     local target = getPlayerByID(id)
     local hrs = tonumber(hours)

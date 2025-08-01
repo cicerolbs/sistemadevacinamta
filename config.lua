@@ -8,6 +8,7 @@ CONFIG = {
         cameraShake = 30 -- intensidade de tremor da câmera
     },
     vaccination = {
+        command = "vacina", -- comando usado pelo SAMU (/vacina + id)
         price = 500, -- valor cobrado pelo SAMU
         protectionMinutes = 60, -- minutos de proteção após vacina do SAMU
         offerTimeout = 15000 -- tempo em ms para aceitar a oferta
@@ -24,6 +25,7 @@ CONFIG = {
         }
     },
     commands = {
+        acl = "Console", -- ACL para usar comandos administrativos
         reset = "resetvacina",
         set = "setvacina"
     }
