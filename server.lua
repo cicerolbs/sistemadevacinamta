@@ -5,7 +5,11 @@ local protectionTimers = {}
 local pendingOffers = {}
 
 local db = dbConnect('sqlite', 'vaccines.db')
-dbExec(db, 'CREATE TABLE IF NOT EXISTS vaccines (serial TEXT PRIMARY KEY, vaccine_expires INTEGER, sick INTEGER, disease_time INTEGER)')
+if db then
+    dbExec(db, 'CREATE TABLE IF NOT EXISTS vaccines (serial TEXT PRIMARY KEY, vaccine_expires INTEGER, sick INTEGER, disease_time INTEGER)')
+else
+    outputDebugString('Falha ao conectar ao banco vaccines.db', 1)
+end
 
 local function isSAMU(player)
     local account = getPlayerAccount(player)
@@ -25,12 +29,16 @@ local function getPlayerByID(id)
 end
 
 local function savePlayerData(player, protectedUntil, sick, diseaseTime)
+    if not db then return end
     local serial = getPlayerSerial(player)
     if not serial then return end
     local prot = protectedUntil or (getElementData(player, 'vaccine.protectedUntil') or 0)
     local sickVal = sick ~= nil and (sick and 1 or 0) or (getElementData(player, 'vaccine.sick') and 1 or 0)
     local diseaseVal = diseaseTime or (getElementData(player, 'vaccine.nextDisease') or 0)
-    dbExec(db, 'INSERT OR REPLACE INTO vaccines (serial, vaccine_expires, sick, disease_time) VALUES (?,?,?,?)', serial, prot, sickVal, diseaseVal)
+    local ok = dbExec(db, 'INSERT OR REPLACE INTO vaccines (serial, vaccine_expires, sick, disease_time) VALUES (?,?,?,?)', serial, prot, sickVal, diseaseVal)
+    if not ok then
+        outputDebugString('Falha ao salvar dados de vacina para '..serial, 1)
+    end
 end
 
 local function startDisease(player)
@@ -96,6 +104,7 @@ local function giveProtection(player, minutes)
 end
 
 local function loadPlayerData(player)
+    if not db then return end
     local serial = getPlayerSerial(player)
     dbQuery(function(qh)
         local result = dbPoll(qh, 0)
@@ -209,7 +218,11 @@ addCommandHandler(config.commands.reset, function(player, cmd, id)
     end
     local target = getPlayerByID(id)
     if not target then
-        outputConsole('Jogador não encontrado.')
+        if player and getElementType(player) == 'player' then
+            exports['[HS]Notify_System']:notify(player, 'Jogador não encontrado.', 'error')
+        else
+            outputConsole('Jogador não encontrado.')
+        end
         return
     end
     setElementData(target, 'vaccine.protected', false)
@@ -217,6 +230,9 @@ addCommandHandler(config.commands.reset, function(player, cmd, id)
     savePlayerData(target, 0, false, 0)
     exports['[HS]Notify_System']:notify(target, 'Sua proteção contra doenças foi removida.', 'error')
     scheduleDisease(target)
+    if player and getElementType(player) == 'player' then
+        exports['[HS]Notify_System']:notify(player, 'Vacina de '..getPlayerName(target)..' resetada.', 'success')
+    end
     outputConsole('Vacina de '..getPlayerName(target)..' resetada.')
 end)
 
@@ -231,11 +247,19 @@ addCommandHandler(config.commands.set, function(player, cmd, id, hours)
     local target = getPlayerByID(id)
     local hrs = tonumber(hours)
     if not target or not hrs then
-        outputConsole('Uso: '..cmd..' <id> <horas>')
+        local msg = 'Uso: '..cmd..' <id> <horas>'
+        if player and getElementType(player) == 'player' then
+            exports['[HS]Notify_System']:notify(player, msg, 'error')
+        else
+            outputConsole(msg)
+        end
         return
     end
     giveProtection(target, hrs * 60)
     exports['[HS]Notify_System']:notify(target, 'Você recebeu proteção contra doenças por '..hrs..'h.', 'success')
+    if player and getElementType(player) == 'player' then
+        exports['[HS]Notify_System']:notify(player, 'Vacina aplicada a '..getPlayerName(target)..' por '..hrs..' horas.', 'success')
+    end
     outputConsole('Vacina aplicada a '..getPlayerName(target)..' por '..hrs..' horas.')
 end)
 
