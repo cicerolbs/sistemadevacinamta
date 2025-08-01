@@ -16,7 +16,16 @@ CONFIG = {
         position = {x = 1177.0, y = -1323.0, z = 14.0}, -- posição do painel no hospital
         price = 2000, -- valor da vacina comprada no painel
         protectionHours = 6, -- horas de proteção extra
-        panel = {x = 0.35, y = 0.3} -- posição do painel DX na tela
+        panel = {x = 0.35, y = 0.3}, -- posição do painel DX na tela
+        markerColor = {r = 0, g = 255, b = 0, a = 150}, -- cor do marcador do hospital
+        buttonColors = { -- cores dos botões do painel
+            buy = {r = 0, g = 150, b = 0},
+            exit = {r = 150, g = 0, b = 0}
+        }
+    },
+    commands = {
+        reset = "resetvacina",
+        set = "setvacina"
     }
 }
 

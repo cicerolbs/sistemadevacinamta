@@ -23,6 +23,7 @@ local function startDisease(player)
     if not isElement(player) then return end
     if getElementData(player, 'vaccine.protected') then return end
     setElementData(player, 'vaccine.sick', true)
+    exports['[HS]Notify_System']:notify(player, 'Você está doente! Procure um SAMU ou vá ao hospital para vacinar-se.', 'warning')
     triggerClientEvent(player, 'vaccine:effects', resourceRoot, true)
     local interval = config.disease.healthInterval * 60000
     diseaseTimers[player] = setTimer(function()
@@ -110,7 +111,8 @@ end)
 -- Shop marker
 do
     local pos = config.shop.position
-    local marker = createMarker(pos.x, pos.y, pos.z - 1, 'cylinder', 1.5, 0,255,0,150)
+    local c = config.shop.markerColor
+    local marker = createMarker(pos.x, pos.y, pos.z - 1, 'cylinder', 1.5, c.r, c.g, c.b, c.a)
     addEventHandler('onMarkerHit', marker, function(player)
         if getElementType(player) ~= 'player' then return end
         triggerClientEvent(player, 'vaccine:showShop', resourceRoot)
@@ -127,5 +129,38 @@ addEventHandler('vaccine:buy', root, function()
     takePlayerMoney(client, price)
     exports['[HS]Notify_System']:notify(client, 'Vacina comprada.', 'success')
     giveProtection(client, config.shop.protectionHours * 60)
+end)
+
+-- Console commands
+addCommandHandler(config.commands.reset, function(player, cmd, id)
+    if player and getElementType(player) == 'player' then
+        exports['[HS]Notify_System']:notify(player, 'Comando disponível apenas no console.', 'error')
+        return
+    end
+    local target = getPlayerByID(id)
+    if not target then
+        outputConsole('Jogador não encontrado.')
+        return
+    end
+    setElementData(target, 'vaccine.protected', false)
+    exports['[HS]Notify_System']:notify(target, 'Sua proteção contra doenças foi removida.', 'error')
+    scheduleDisease(target)
+    outputConsole('Vacina de '..getPlayerName(target)..' resetada.')
+end)
+
+addCommandHandler(config.commands.set, function(player, cmd, id, hours)
+    if player and getElementType(player) == 'player' then
+        exports['[HS]Notify_System']:notify(player, 'Comando disponível apenas no console.', 'error')
+        return
+    end
+    local target = getPlayerByID(id)
+    local hrs = tonumber(hours)
+    if not target or not hrs then
+        outputConsole('Uso: '..cmd..' <id> <horas>')
+        return
+    end
+    giveProtection(target, hrs * 60)
+    exports['[HS]Notify_System']:notify(target, 'Você recebeu proteção contra doenças por '..hrs..'h.', 'success')
+    outputConsole('Vacina aplicada a '..getPlayerName(target)..' por '..hrs..' horas.')
 end)
 
