@@ -1,4 +1,4 @@
-local config = loadfile('config.lua')()
+local config = CONFIG
 local showPanel = false
 local sx, sy = guiGetScreenSize()
 local panelX, panelY = config.shop.panel.x * sx, config.shop.panel.y * sy

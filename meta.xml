@@ -1,5 +1,6 @@
 <meta>
     <info author="ChatGPT" name="Vaccine System" type="script" />
+    <script src="config.lua" type="shared" />
     <script src="server.lua" type="server" />
     <script src="client.lua" type="client" />
 </meta>
