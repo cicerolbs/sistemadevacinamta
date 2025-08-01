@@ -1,4 +1,4 @@
-return {
+CONFIG = {
     aclGroup = "SAMU",
     disease = {
         startMinutes = 30, -- minutos para começar a ficar doente

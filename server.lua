@@ -1,4 +1,4 @@
-local config = loadfile('config.lua')()
+local config = CONFIG
 local diseaseTimers = {}
 local pendingOffers = {}
 
