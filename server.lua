@@ -20,8 +20,9 @@ end
 local function getPlayerByID(id)
     id = tonumber(id)
     if not id then return nil end
-    for _,p in ipairs(getElementsByType('player')) do
-        if tonumber(getElementData(p, 'id')) == id then
+    for _, p in ipairs(getElementsByType('player')) do
+        local pid = getElementData(p, 'id') or getElementData(p, 'ID') or getElementData(p, 'playerid')
+        if tonumber(pid) == id then
             return p
         end
     end
@@ -52,6 +53,8 @@ local function startDisease(player)
     savePlayerData(player, 0, true, 0)
     exports['[HS]Notify_System']:notify(player, 'Você está doente! Procure um SAMU ou vá ao hospital para vacinar-se.', 'warning')
     triggerClientEvent(player, 'vaccine:effects', resourceRoot, true)
+    local currentHealth = getElementHealth(player)
+    setElementHealth(player, math.max(currentHealth - config.disease.healthAmount, 0))
     local interval = config.disease.healthInterval * 60000
     diseaseDamageTimers[player] = setTimer(function()
         if isElement(player) and getElementData(player, 'vaccine.sick') then
@@ -89,6 +92,7 @@ local function giveProtection(player, minutes)
     end
     setElementData(player, 'vaccine.sick', false)
     triggerClientEvent(player, 'vaccine:effects', resourceRoot, false)
+    setElementHealth(player, 100)
     local expires = getRealTime().timestamp + minutes * 60
     setElementData(player, 'vaccine.protected', true)
     setElementData(player, 'vaccine.protectedUntil', expires)
