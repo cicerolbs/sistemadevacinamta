@@ -13,6 +13,10 @@ CONFIG = {
         protectionMinutes = 60, -- minutos de proteção após vacina do SAMU
         offerTimeout = 15000 -- tempo em ms para aceitar a oferta
     },
+    samuCall = {
+        command = "samu", -- comando para solicitar o SAMU
+        timeoutMinutes = 5 -- tempo em minutos para o chamado expirar
+    },
     shop = {
         position = {x = 1177.0, y = -1323.0, z = 14.0}, -- posição do painel no hospital
         price = 2000, -- valor da vacina comprada no painel
