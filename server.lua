@@ -3,6 +3,7 @@ local diseaseDamageTimers = {}
 local diseaseStartTimers = {}
 local protectionTimers = {}
 local pendingOffers = {}
+local samuTargets = {}
 
 -- Garantir que o evento clientside esteja registrado para evitar erros
 addEvent('vaccine:effects', true)
@@ -30,6 +31,39 @@ local function getPlayerByID(id)
         end
     end
     return nil
+end
+
+local function clearSamuTarget(player)
+    local data = samuTargets[player]
+    if not data then return end
+    if isTimer(data.timer) then killTimer(data.timer) end
+    if isTimer(data.checkTimer) then killTimer(data.checkTimer) end
+    exports['[HS]Target']:setTarget(player, {})
+    samuTargets[player] = nil
+end
+
+local function createSamuTarget(caller, samu)
+    clearSamuTarget(samu)
+    local x, y, z = getElementPosition(caller)
+    exports['[HS]Target']:setTarget(samu, { Vector3(x, y, z) }, { title = 'Marcação', hex = '#FFFFFF' })
+
+    local function remove()
+        clearSamuTarget(samu)
+    end
+
+    local timer = setTimer(remove, config.samuCall.timeoutMinutes * 60000, 1)
+    local checkTimer = setTimer(function()
+        if not isElement(caller) or not isElement(samu) then
+            remove()
+            return
+        end
+        local sx, sy, sz = getElementPosition(samu)
+        local cx, cy, cz = getElementPosition(caller)
+        if getDistanceBetweenPoints3D(sx, sy, sz, cx, cy, cz) < 5 then
+            remove()
+        end
+    end, 1000, 0)
+    samuTargets[samu] = {timer = timer, checkTimer = checkTimer}
 end
 
 local function savePlayerData(player, protectedUntil, sick, diseaseTime)
@@ -148,6 +182,7 @@ addEventHandler('onPlayerJoin', root, function()
 end)
 
 addEventHandler('onPlayerQuit', root, function()
+    clearSamuTarget(source)
     savePlayerData(source)
 end)
 
@@ -191,6 +226,21 @@ addCommandHandler('aceitar', function(player)
     exports['[HS]Notify_System']:notify(player, 'Vacina aplicada.', 'success')
     exports['[HS]Notify_System']:notify(offer.from, 'Você aplicou a vacina.', 'success')
     giveProtection(player, config.vaccination.protectionMinutes)
+end)
+
+addCommandHandler(config.samuCall.command, function(player)
+    exports['[HS]Notify_System']:notify(player, 'SAMU solicitado. Aguarde no local.', 'info')
+    local found = false
+    for _, samu in ipairs(getElementsByType('player')) do
+        if isSAMU(samu) then
+            found = true
+            exports['[HS]Notify_System']:notify(samu, 'Um jogador solicitou o SAMU.', 'info')
+            createSamuTarget(player, samu)
+        end
+    end
+    if not found then
+        exports['[HS]Notify_System']:notify(player, 'Nenhum SAMU disponível no momento.', 'error')
+    end
 end)
 
 -- Shop marker
